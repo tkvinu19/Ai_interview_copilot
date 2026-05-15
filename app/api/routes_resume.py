@@ -5,7 +5,9 @@ import os
 
 from app.db.deps import get_db
 from app.models.resume import Resume
+from app.models.chunk import Chunk
 from app.core.dependencies import get_current_user
+from app.core.chunking import chunk_text
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
@@ -19,18 +21,18 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    # Validate file
+    # ✅ Validate file
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files allowed")
 
     file_path = os.path.join(UPLOAD_DIR, file.filename)
 
-    # Save file
+    # ✅ Save file locally
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
 
-    # Extract text
+    # ✅ Extract text from PDF
     try:
         doc = fitz.open(file_path)
         text = ""
@@ -43,18 +45,35 @@ async def upload_resume(
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading PDF")
 
-    # 🔥 SAVE TO DATABASE
+    # ❌ Optional: prevent empty extraction
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Empty or unreadable PDF")
+
+    # ✅ Save resume (use flush to get ID)
     new_resume = Resume(
         user_id=int(user_id),
         content=text
     )
 
     db.add(new_resume)
+    db.flush()  # gets new_resume.id without full commit
+
+    # ✅ Create chunks
+    chunks = chunk_text(text)
+
+    for chunk_content in chunks:
+        new_chunk = Chunk(
+            resume_id=new_resume.id,
+            content=chunk_content
+        )
+        db.add(new_chunk)
+
+    # ✅ Final commit (single commit for everything)
     db.commit()
-    db.refresh(new_resume)
 
     return {
-        "message": "Resume uploaded and stored successfully",
+        "message": "Resume uploaded, stored, and chunked successfully",
         "resume_id": new_resume.id,
+        "chunks_created": len(chunks),
         "preview": text[:500]
     }
