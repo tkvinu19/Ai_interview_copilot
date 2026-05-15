@@ -1,18 +1,25 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-import fitz  # PyMuPDF
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from sqlalchemy.orm import Session
+import fitz
 import os
+
+from app.db.deps import get_db
+from app.models.resume import Resume
+from app.core.dependencies import get_current_user
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
 UPLOAD_DIR = "uploads"
-
-# Ensure upload folder exists
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.post("/upload")
-async def upload_resume(file: UploadFile = File(...)):
-    # Validate file type
+async def upload_resume(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user)
+):
+    # Validate file
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files allowed")
 
@@ -23,7 +30,7 @@ async def upload_resume(file: UploadFile = File(...)):
         content = await file.read()
         f.write(content)
 
-    # Extract text using PyMuPDF
+    # Extract text
     try:
         doc = fitz.open(file_path)
         text = ""
@@ -36,7 +43,18 @@ async def upload_resume(file: UploadFile = File(...)):
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading PDF")
 
+    # 🔥 SAVE TO DATABASE
+    new_resume = Resume(
+        user_id=int(user_id),
+        content=text
+    )
+
+    db.add(new_resume)
+    db.commit()
+    db.refresh(new_resume)
+
     return {
-        "filename": file.filename,
-        "extracted_text": text[:1000]  # limit output for now
+        "message": "Resume uploaded and stored successfully",
+        "resume_id": new_resume.id,
+        "preview": text[:500]
     }
