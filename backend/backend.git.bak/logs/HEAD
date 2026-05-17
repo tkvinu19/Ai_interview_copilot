@@ -1,9 +1,0 @@
-0000000000000000000000000000000000000000 ce919ddc33cad8c0a5acd4721b3c1d1ec3836eb2 tkvinu19 <tkvinayak19@gmail.com> 1778794281 +0530	commit (initial): Initial backend setup: FastAPI + PostgreSQL + JWT auth
-ce919ddc33cad8c0a5acd4721b3c1d1ec3836eb2 0000000000000000000000000000000000000000 tkvinu19 <tkvinayak19@gmail.com> 1778794309 +0530	Branch: renamed refs/heads/master to refs/heads/main
-0000000000000000000000000000000000000000 ce919ddc33cad8c0a5acd4721b3c1d1ec3836eb2 tkvinu19 <tkvinayak19@gmail.com> 1778794309 +0530	Branch: renamed refs/heads/master to refs/heads/main
-ce919ddc33cad8c0a5acd4721b3c1d1ec3836eb2 a084aaf325fd46b9a6b4884ddad157e8036130fa tkvinu19 <tkvinayak19@gmail.com> 1778877364 +0530	commit: Add resume upload and PDF text extraction
-a084aaf325fd46b9a6b4884ddad157e8036130fa 0876bb731acb720e39a1fe70c18d85d5bf545bc8 tkvinu19 <tkvinayak19@gmail.com> 1778878171 +0530	commit: Store resume in database with user linkage
-0876bb731acb720e39a1fe70c18d85d5bf545bc8 92f68821f69921bea2a48729b679a1f809a0581b tkvinu19 <tkvinayak19@gmail.com> 1778879100 +0530	commit: Add chunking and optimized resume processing
-92f68821f69921bea2a48729b679a1f809a0581b c5ef09a2190781cf654577da0d38edb63471d44d tkvinu19 <tkvinayak19@gmail.com> 1779037478 +0530	commit: Add embeddings for semantic search
-c5ef09a2190781cf654577da0d38edb63471d44d 3d61668d7ffa35416100eb604abdb47177c4e59a tkvinu19 <tkvinayak19@gmail.com> 1779044140 +0530	commit: Added semantic search
-3d61668d7ffa35416100eb604abdb47177c4e59a 193cc5de2a35552dcb7637d618d7292ee8e977f3 tkvinu19 <tkvinayak19@gmail.com> 1779052421 +0530	commit: Added human-like LLM answer generation using Groq LLaMA 3 with smart fallback and chunk filtering
