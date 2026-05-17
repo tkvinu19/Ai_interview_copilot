@@ -8,3 +8,4 @@ class Chunk(Base):
     id = Column(Integer, primary_key=True, index=True)
     resume_id = Column(Integer, ForeignKey("resumes.id"))
     content = Column(Text)
+    embedding = Column(Text)  # store as string (JSON)

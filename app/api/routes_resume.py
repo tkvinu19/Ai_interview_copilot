@@ -2,12 +2,14 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from sqlalchemy.orm import Session
 import fitz
 import os
+import json
 
 from app.db.deps import get_db
 from app.models.resume import Resume
 from app.models.chunk import Chunk
 from app.core.dependencies import get_current_user
 from app.core.chunking import chunk_text
+from app.core.embeddings import get_embedding
 
 router = APIRouter(prefix="/resume", tags=["Resume"])
 
@@ -45,34 +47,38 @@ async def upload_resume(
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading PDF")
 
-    # ❌ Optional: prevent empty extraction
+    # ❌ Handle empty PDFs
     if not text.strip():
         raise HTTPException(status_code=400, detail="Empty or unreadable PDF")
 
-    # ✅ Save resume (use flush to get ID)
+    # ✅ Save resume first
     new_resume = Resume(
         user_id=int(user_id),
         content=text
     )
 
     db.add(new_resume)
-    db.flush()  # gets new_resume.id without full commit
+    db.flush()  # get resume_id without full commit
 
-    # ✅ Create chunks
+    # ✅ Chunk + Embedding
     chunks = chunk_text(text)
 
     for chunk_content in chunks:
+        embedding = get_embedding(chunk_content)
+
         new_chunk = Chunk(
             resume_id=new_resume.id,
-            content=chunk_content
+            content=chunk_content,
+            embedding=json.dumps(embedding)  # store as string
         )
+
         db.add(new_chunk)
 
-    # ✅ Final commit (single commit for everything)
+    # ✅ Final commit
     db.commit()
 
     return {
-        "message": "Resume uploaded, stored, and chunked successfully",
+        "message": "Resume uploaded, stored, chunked, and embedded successfully",
         "resume_id": new_resume.id,
         "chunks_created": len(chunks),
         "preview": text[:500]
