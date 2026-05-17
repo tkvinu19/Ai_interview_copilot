@@ -1,29 +1,42 @@
 from fastapi import FastAPI
+from dotenv import load_dotenv
+import os
 
-from app.db.database import engine, Base
+# ==============================
+# 🔐 LOAD ENV VARIABLES
+# ==============================
+load_dotenv()
 
-# ✅ Import models (VERY IMPORTANT for table creation)
-from app.models.user import User
-from app.models.resume import Resume
-from app.models.chunk import Chunk
+# Optional debug (remove later)
+print("HF KEY LOADED:", os.getenv("HF_API_KEY") is not None)
 
-# ✅ Import routers
+# ==============================
+# 🚀 IMPORT ROUTERS
+# ==============================
 from app.api.routes_auth import router as auth_router
 from app.api.routes_resume import router as resume_router
 from app.api.routes_search import router as search_router
 
-app = FastAPI(title="AI Interview Copilot API")
+# ==============================
+# 🚀 INIT FASTAPI APP
+# ==============================
+app = FastAPI(
+    title="AI Interview Copilot",
+    version="1.0"
+)
 
-# ✅ Create tables
-Base.metadata.create_all(bind=engine)
-
-# ✅ Register routes
+# ==============================
+# 🔗 INCLUDE ROUTES
+# ==============================
 app.include_router(auth_router)
 app.include_router(resume_router)
 app.include_router(search_router)
 
-
-# ✅ Root route
+# ==============================
+# 🏠 ROOT ENDPOINT
+# ==============================
 @app.get("/")
 def root():
-    return {"message": "AI Interview Copilot API is running"}
+    return {
+        "message": "AI Interview Copilot API is running 🚀"
+    }

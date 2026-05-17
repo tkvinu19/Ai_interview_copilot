@@ -1,76 +1,69 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.db.database import get_db
+
+from app.db.deps import get_db
 from app.models.chunk import Chunk
 from app.models.resume import Resume
 from app.core.dependencies import get_current_user
+from app.services.embeddings import get_embedding
+from app.services.llm import generate_answer
+from app.core.search import score_chunks
 
-import numpy as np
-import ast
-
-from app.services.embeddings import get_embedding  # make sure this matches your file name
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
-# -------------------------------
-# Cosine Similarity Function
-# -------------------------------
-def cosine_similarity(a, b):
-    a = np.array(a)
-    b = np.array(b)
-
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-
-# -------------------------------
-# Semantic Search Route
-# -------------------------------
 @router.post("/")
 def semantic_search(
-    query: str = Query(...),
+    query: str,
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    # Step 1: Convert query → embedding
-    query_embedding = get_embedding(query)
+    try:
+        user_id = int(user_id)
 
-    # Step 2: Fetch ONLY user's chunks (CRITICAL FIX)
-    chunks = db.query(Chunk).join(Resume).filter(
-        Resume.user_id == int(user_id)
-    ).all()
+        # ── 1. Embed the query ───────────────────────────────────
+        query_embedding = get_embedding(query)
 
-    results = []
+        # ── 2. Load all user chunks ──────────────────────────────
+        chunks = db.query(Chunk).join(Resume).filter(
+            Resume.user_id == user_id
+        ).all()
 
-    for chunk in chunks:
-        try:
-            # Step 3: Convert stored embedding (string → list)
-            chunk_embedding = ast.literal_eval(chunk.embedding)
+        if not chunks:
+            raise HTTPException(status_code=404, detail="No resume data found. Please upload your resume first.")
 
-            # Step 4: Compute similarity
-            score = cosine_similarity(query_embedding, chunk_embedding)
+        # ── 3. Score + rank chunks (boost logic inside) ──────────
+        top_matches = score_chunks(
+            query=query,
+            query_embedding=query_embedding,
+            chunks=chunks,
+            top_k=3
+        )
 
-            # Step 5: Boost for "project-like" chunks
-            if "project" in query.lower():
-                if "project" in chunk.content.lower() or "built" in chunk.content.lower():
-                    score += 0.05
+        # ── 4. Smart chunk selection for LLM ────────────────────
+        # Only pass chunks that are genuinely relevant (score > 0.25)
+        # This is the key fix for project mixing
+        relevant_chunks = [
+            item["content"]
+            for item in top_matches
+            if item["score"] > 0.25
+        ]
 
-            results.append({
-                "content": chunk.content,
-                "score": float(score)
-            })
+        # Always pass at least 1 chunk even if scores are low
+        if not relevant_chunks:
+            relevant_chunks = [top_matches[0]["content"]]
 
-        except Exception as e:
-            # Skip bad embeddings safely
-            continue
+        # ── 5. Generate LLM answer ───────────────────────────────
+        answer = generate_answer(query, relevant_chunks)
 
-    # Step 6: Sort by score (highest first)
-    results = sorted(results, key=lambda x: x["score"], reverse=True)
+        return {
+            "query": query,
+            "answer": answer,
+            "top_matches": top_matches  # keep for debugging
+        }
 
-    # Step 7: Return top 3 matches
-    top_matches = results[:3]
-
-    return {
-        "query": query,
-        "top_matches": top_matches
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
