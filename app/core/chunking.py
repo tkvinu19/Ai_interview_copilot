@@ -1,9 +1,33 @@
-def chunk_text(text: str, chunk_size: int = 120):
-    words = text.split()
-    chunks = []
+def chunk_text(text: str, max_chars: int = 300):
+    lines = text.split("\n")
 
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i + chunk_size])
-        chunks.append(chunk)
+    chunks = []
+    current_chunk = ""
+
+    for line in lines:
+        # 🔹 Clean line (REMOVE bullets, dots, etc.)
+        line = line.strip().lstrip(".•- ").strip()
+
+        if not line:
+            continue
+
+        # 🔹 New section detection (better structure)
+        if line.isupper() or line.endswith(":"):
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = line
+            continue
+
+        # 🔹 Build chunk
+        if len(current_chunk) + len(line) + 1 <= max_chars:
+            current_chunk += " " + line
+        else:
+            if current_chunk:
+                chunks.append(current_chunk.strip())
+            current_chunk = line
+
+    # 🔹 Final chunk
+    if current_chunk:
+        chunks.append(current_chunk.strip())
 
     return chunks

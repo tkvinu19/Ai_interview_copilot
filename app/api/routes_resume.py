@@ -23,18 +23,44 @@ async def upload_resume(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user)
 ):
-    # ✅ Validate file
+    user_id = int(user_id)
+
+    # ==============================
+    # ✅ STEP 1: DELETE OLD DATA
+    # ==============================
+
+    old_resumes = db.query(Resume).filter(Resume.user_id == user_id).all()
+
+    for resume in old_resumes:
+        # delete related chunks first
+        db.query(Chunk).filter(Chunk.resume_id == resume.id).delete()
+
+    # delete resumes
+    db.query(Resume).filter(Resume.user_id == user_id).delete()
+
+    db.commit()
+
+    # ==============================
+    # ✅ STEP 2: VALIDATE FILE
+    # ==============================
+
     if not file.filename.endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files allowed")
 
     file_path = os.path.join(UPLOAD_DIR, file.filename)
 
-    # ✅ Save file locally
+    # ==============================
+    # ✅ STEP 3: SAVE FILE
+    # ==============================
+
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
 
-    # ✅ Extract text from PDF
+    # ==============================
+    # ✅ STEP 4: EXTRACT TEXT
+    # ==============================
+
     try:
         doc = fitz.open(file_path)
         text = ""
@@ -47,20 +73,25 @@ async def upload_resume(
     except Exception:
         raise HTTPException(status_code=500, detail="Error reading PDF")
 
-    # ❌ Handle empty PDFs
     if not text.strip():
         raise HTTPException(status_code=400, detail="Empty or unreadable PDF")
 
-    # ✅ Save resume first
+    # ==============================
+    # ✅ STEP 5: SAVE RESUME
+    # ==============================
+
     new_resume = Resume(
-        user_id=int(user_id),
+        user_id=user_id,
         content=text
     )
 
     db.add(new_resume)
-    db.flush()  # get resume_id without full commit
+    db.flush()  # get ID before commit
 
-    # ✅ Chunk + Embedding
+    # ==============================
+    # ✅ STEP 6: CHUNK + EMBEDDING
+    # ==============================
+
     chunks = chunk_text(text)
 
     for chunk_content in chunks:
@@ -69,17 +100,20 @@ async def upload_resume(
         new_chunk = Chunk(
             resume_id=new_resume.id,
             content=chunk_content,
-            embedding=json.dumps(embedding)  # store as string
+            embedding=json.dumps(embedding)
         )
 
         db.add(new_chunk)
 
-    # ✅ Final commit
     db.commit()
 
+    # ==============================
+    # ✅ RESPONSE
+    # ==============================
+
     return {
-        "message": "Resume uploaded, stored, chunked, and embedded successfully",
+        "message": "Resume uploaded, replaced old data, chunked, and embedded successfully",
         "resume_id": new_resume.id,
         "chunks_created": len(chunks),
-        "preview": text[:500]
+        "preview": text[:300]
     }
